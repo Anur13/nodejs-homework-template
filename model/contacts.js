@@ -30,6 +30,8 @@ async function removeContact(contactId) {
   try {
     const contacts = await listContacts()
     const filtredContacts = contacts.filter(contact => contact.id !== +contactId)
+    const foundContact = contacts.find(contact => contact.id === +contactId)
+    if (foundContact === undefined) return undefined
     // nodemon создает бесконечный цикл на записи
     // для этого создал nodemon.json
     FSpromises.writeFile(contactsPath, JSON.stringify(filtredContacts))
@@ -53,26 +55,23 @@ async function addContact(name, email, phone) {
 
 async function updateContact(contactId, body) {
   try {
-    let contacts = await listContacts()
+    const contacts = await listContacts()
     let foundContact = contacts.find(contact => contact.id === +contactId)
     if (foundContact === undefined) {
       return undefined
     }
     foundContact = { id: +contactId, ...body }
     await removeContact(contactId)
-    contacts = await listContacts()
-    FSpromises.writeFile(contactsPath, JSON.stringify([...contacts, foundContact]))
+    const filtredContacts = contacts.filter(contact => contact.id !== +contactId)
+    FSpromises.writeFile(contactsPath, JSON.stringify([...filtredContacts, foundContact]))
     return foundContact
   } catch (err) {
     throw new Error(err)
   }
 }
-// removeContact(14)
-// removeContact(5).then((res) => console.log(res))
 module.exports = { listContacts, addContact, removeContact, getContactById, updateContact }
-// console.log(contactsPath)
-// updateContact(1, {
-//   name: 'test ',
+// updateContact(9, {
+//   name: 'bla bla',
 //   email: 'test@gmail.com',
-//   phone: '1000'
-// })
+//   phone: '3000'
+// }).then(data => console.log(data))
