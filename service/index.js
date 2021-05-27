@@ -1,4 +1,5 @@
 const Contact = require('./schemas/contacts')
+const passport = require('passport')
 
 const listContacts = async () => {
   return Contact.find()
@@ -24,11 +25,25 @@ const removeContact = id => {
   return Contact.findByIdAndRemove({ _id: id })
 }
 
+const auth = (req, res, next) => {
+  passport.authenticate('jwt', { session: false }, (err, user) => {
+    if (!user || err) {
+      return res.status(401).json({
+        code: 401,
+        message: 'Unauthorized'
+      })
+    }
+    req.user = user
+    next()
+  })(req, res, next)
+}
+
 module.exports = {
   listContacts,
   getContactById,
   addContact,
   updateContact,
   removeContact,
-  updateStatusContact
+  updateStatusContact,
+  auth
 }
