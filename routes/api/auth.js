@@ -40,7 +40,6 @@ router.post('/users/login', async (req, res, next) => {
       username: user.username
     }
     const token = jwt.sign(payload, secret, { expiresIn: '1h' })
-    console.log(req.body)
     await User.findByIdAndUpdate({ _id: payload.id }, { ...req.body, password: hashedPass, token })
     res.json({
       status: 'success',
