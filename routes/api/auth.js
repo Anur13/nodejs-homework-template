@@ -5,8 +5,26 @@ const User = require('../../service/schemas/users')
 const secret = process.env.SECRET
 const { auth } = require('../../service')
 const bCrypt = require('bcryptjs')
+const multer = require('multer')
+const gravatar = require('gravatar')
+const path = require('path')
+
+const compressImage = require('../helpers/imageHandler')
 
 const Joi = require('joi')
+
+const tmpdir = path.join(process.cwd(), 'tmp')
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, tmpdir)
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.fieldname + '-' + Date.now())
+  }
+})
+
+const upload = multer({ storage: storage })
 
 const schema = Joi.object({
   password: Joi.string()
@@ -17,6 +35,8 @@ const schema = Joi.object({
   email: Joi.string().email().required()
 })
 
+// LOGIN//
+
 router.post('/users/login', async (req, res, next) => {
   const { value, error } = schema.validate(req.body)
   const { email, password } = value
@@ -24,24 +44,30 @@ router.post('/users/login', async (req, res, next) => {
     res.status(400).json({ message: error.message })
     return
   }
-
   try {
     const user = await User.findOne({ email })
+    if (user === null) {
+      res.status(400).json({
+        message: 'User not found'
+      })
+    }
+
     const passwordCheck = await user.validPassword(password)
     if (!user || !passwordCheck) {
-      return res.status(401).json({
+      res.status(401).json({
         code: 401,
         message: 'Email or password is wrong'
       })
+      return
     }
+
     const hashedPass = bCrypt.hashSync(password, bCrypt.genSaltSync(6))
     const payload = {
       id: user.id,
       username: user.username
     }
     const token = jwt.sign(payload, secret, { expiresIn: '1h' })
-    console.log(req.body)
-    await User.findByIdAndUpdate({ _id: payload.id }, { ...req.body, passwrod: hashedPass, token })
+    await User.findByIdAndUpdate({ _id: payload.id }, { ...req.body, password: hashedPass, token })
     res.json({
       status: 'success',
       code: 200,
@@ -50,9 +76,11 @@ router.post('/users/login', async (req, res, next) => {
       }
     })
   } catch (error) {
-    res.status(400).json({ message: error })
+    res.status(400).json({ message: error.message })
   }
 })
+
+// REGISTER//
 
 router.post('/users/signup', async (req, res, next) => {
   const { value, error } = schema.validate(req.body)
@@ -68,7 +96,7 @@ router.post('/users/signup', async (req, res, next) => {
   }
   try {
     const hashedPass = bCrypt.hashSync(password, bCrypt.genSaltSync(6))
-    const newUser = new User({ hashedPass, email, subscription })
+    const newUser = new User({ hashedPass, email, subscription, avatarURL: gravatar.url(email) })
     newUser.setPassword(password)
     await newUser.save()
     res.status(201).json({
@@ -83,6 +111,8 @@ router.post('/users/signup', async (req, res, next) => {
     res.status(400).json({ message: error.message })
   }
 })
+
+// LOGOUT//
 
 router.post('/users/logout', auth, async (req, res, next) => {
   const id = req.user._id
@@ -102,4 +132,22 @@ router.post('/users/current', auth, async (req, res, next) => {
     message: { email, subscription }
   })
 })
+
+// CHANGE AVATAR//
+
+router.patch('/users/avatars', upload.single('avatar'), compressImage, auth, async (req, res, next) => {
+  const id = req.user._id
+
+  try {
+    const newAvatarUrl = req.newUrl
+    await User.findByIdAndUpdate({ _id: id }, { avatarURL: newAvatarUrl }, { new: true })
+
+    return res.status(200).json({
+      avatarURL: newAvatarUrl
+    })
+  } catch (error) {
+    return res.status(400).json({ message: error.message })
+  }
+})
+
 module.exports = router
