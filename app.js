@@ -14,7 +14,8 @@ require('dotenv').config()
 app.use(logger(formatsLogger))
 app.use(cors())
 app.use(express.json())
-
+const path = require('path')
+app.use('/api/contacts/avatars', express.static(path.join(__dirname, 'public/avatars')))
 app.use('/api/contacts', contactsRouter, authRouter)
 
 app.use((req, res) => {

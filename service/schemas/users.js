@@ -1,6 +1,5 @@
 const mongoose = require('mongoose')
 const bCrypt = require('bcryptjs')
-
 const Schema = mongoose.Schema
 
 const userSchema = new Schema({
@@ -25,7 +24,9 @@ const userSchema = new Schema({
   owner: {
     type: Schema.Types.ObjectId,
     ref: 'user'
-  }
+  },
+
+  avatarURL: String
 })
 
 userSchema.methods.setPassword = async function (password) {
