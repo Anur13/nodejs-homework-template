@@ -8,10 +8,11 @@ const bCrypt = require('bcryptjs')
 const multer = require('multer')
 const gravatar = require('gravatar')
 const path = require('path')
-
 const compressImage = require('../helpers/imageHandler')
-
 const Joi = require('joi')
+const { v4: uuidv4 } = require('uuid')
+
+const sender = require('../../service/emailer/nodemailer')
 
 const tmpdir = path.join(process.cwd(), 'tmp')
 
@@ -46,8 +47,13 @@ router.post('/users/login', async (req, res, next) => {
   }
   try {
     const user = await User.findOne({ email })
-    if (user === null) {
+    if (!user.verify) {
       res.status(400).json({
+        message: 'Account not verified'
+      })
+    }
+    if (user === null) {
+      return res.status(404).json({
         message: 'User not found'
       })
     }
@@ -95,10 +101,13 @@ router.post('/users/signup', async (req, res, next) => {
     })
   }
   try {
+    const verificationToken = uuidv4()
     const hashedPass = bCrypt.hashSync(password, bCrypt.genSaltSync(6))
-    const newUser = new User({ hashedPass, email, subscription, avatarURL: gravatar.url(email) })
+    const newUser = new User({ hashedPass, email, subscription, verifyToken: verificationToken, avatarURL: gravatar.url(email) })
     newUser.setPassword(password)
     await newUser.save()
+    sender(email, `Please follow this link  http://localhost:3000/api/contacts/users/verify/${verificationToken} to verify your account`)
+
     res.status(201).json({
       status: 'success',
       code: 201,
@@ -150,4 +159,57 @@ router.patch('/users/avatars', upload.single('avatar'), compressImage, auth, asy
   }
 })
 
+// VERIFY TOKEN //
+router.get('/users/verify/:verificationToken', async (req, res, next) => {
+  const { verificationToken } = req.params
+  try {
+    const user = await User.findOneAndUpdate({ verifyToken: verificationToken }, { verifyToken: null, verify: true })
+    if (user === null) {
+      return res.status(404).json({
+        message: 'User not found'
+      })
+    }
+    res.status(200).json({
+      message: 'Verification successful'
+    })
+  } catch (error) {
+    return res.status(400).json({ message: error.message })
+  }
+})
+
+// SEND VERIFICATION //
+
+const emailSchema = Joi.object({
+  email: Joi.string().email().required()
+})
+
+router.post('/users/verify', async (req, res, next) => {
+  const { value, error } = emailSchema.validate(req.body)
+  const { email } = value
+  if (error) {
+    res.status(400).json({ message: error.message })
+    return
+  }
+  try {
+    const user = await User.findOne({ email })
+    const verificationToken = user.verifyToken
+
+    if (user === null) {
+      return res.status(404).json({
+        message: 'User not found'
+      })
+    }
+    if (user.verify) {
+      return res.status(400).json({
+        message: 'Verification has already been passed'
+      })
+    }
+    sender(email, `Your token ${verificationToken}`)
+    res.status(200).json({
+      message: 'Verification email sent'
+    })
+  } catch (error) {
+    return res.status(400).json({ message: error.message })
+  }
+})
 module.exports = router
